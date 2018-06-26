@@ -94,7 +94,6 @@ public class SRX implements Serializable {
         this.mappingRules = new ArrayList<MapRule>();
         this.includeEndingTags = true;
         this.segmentSubflows = true;
-        initDefaults();
     }
 
     /**
@@ -217,12 +216,13 @@ public class SRX implements Serializable {
             return loadConfFile(inFile);
         }
 
-        return null; // Note: as in previous version, default is null, not empty
+        // Note: as in previous version (4.1) return a new SRX with defaults
+        return loadSrxFile(getDefaultFromJar());
     }
 
     /**
      * Loads segmentation rules from an XML file. If there's an error loading a
-     * file, it calls <code>initDefaults</code>.
+     * file, it calls <code>getDefaultFromJar</code>.
      * <p>
      * Since 1.6.0 RC8 it also checks if the version of segmentation rules saved
      * is older than that of the current OmegaT, and tries to merge the two sets
@@ -244,9 +244,7 @@ public class SRX implements Serializable {
                     sb.append("\n");
                 }
                 Log.logErrorRB("CORE_SRX_EXC_LOADING_SEG_RULES", sb.toString());
-                res = new SRX();
-                res.initDefaults();
-                return res;
+                return loadSrxFile(getDefaultFromJar());
             }
 
             // checking the version
@@ -254,8 +252,7 @@ public class SRX implements Serializable {
                 // yeap, the segmentation config file is of the older version
 
                 // initing defaults
-                SRX defaults = new SRX();
-                defaults.initDefaults();
+                SRX defaults = loadSrxFile(getDefaultFromJar());
                 // and merging them into loaded rules
                 res = merge(res, defaults);
             }
@@ -265,8 +262,7 @@ public class SRX implements Serializable {
             if (!(e instanceof FileNotFoundException)) {
                 Log.log(e);
             }
-            res = new SRX();
-            res.initDefaults();
+            res = loadSrxFile(getDefaultFromJar());
         }
         return res;
     }
@@ -448,12 +444,12 @@ public class SRX implements Serializable {
     /**
      * Initializes default rules.
      */
-    private void initDefaults() {
-        loadSrxFile(this.getClass().getResource("defaultRules.srx"));
+    private static URL getDefaultFromJar() {
+        return SRX.class.getResource("defaultRules.srx");
     }
 
     public static SRX getDefault() {
-        SRX srx = new SRX();
+        SRX srx = loadSrxFile(getDefaultFromJar());
         srx.init();
         return srx;
     }
