@@ -87,15 +87,6 @@ public class SRX implements Serializable {
     }
 
     /**
-     * Initializes SRX rules to defaults.
-     */
-    private void init() {
-        this.mappingRules = new ArrayList<MapRule>();
-        this.includeEndingTags = true;
-        this.segmentSubflows = true;
-    }
-
-    /**
      * Creates an empty SRX, without any rules.
      * <p>
      * Please do not call directly unless you know what you are doing.
@@ -197,7 +188,7 @@ public class SRX implements Serializable {
         }
 
         // Note: as in previous version (4.1) return a new SRX with defaults
-        return loadSrxFile(getDefaultFromJar());
+        return SRX.getDefault();
     }
 
     /**
@@ -224,7 +215,7 @@ public class SRX implements Serializable {
                     sb.append("\n");
                 }
                 Log.logErrorRB("CORE_SRX_EXC_LOADING_SEG_RULES", sb.toString());
-                return loadSrxFile(getDefaultFromJar());
+                return SRX.getDefault();
             }
 
             // checking the version
@@ -232,7 +223,7 @@ public class SRX implements Serializable {
                 // yeap, the segmentation config file is of the older version
 
                 // initing defaults
-                SRX defaults = loadSrxFile(getDefaultFromJar());
+                SRX defaults = SRX.getDefault();
                 // and merging them into loaded rules
                 res = merge(res, defaults);
             }
@@ -242,7 +233,7 @@ public class SRX implements Serializable {
             if (!(e instanceof FileNotFoundException)) {
                 Log.log(e);
             }
-            res = loadSrxFile(getDefaultFromJar());
+            res = SRX.getDefault();
         }
         return res;
     }
@@ -423,16 +414,10 @@ public class SRX implements Serializable {
     // Patterns
     private static final String DEFAULT_RULES_PATTERN = ".*";
 
-    /**
-     * Initializes default rules.
-     */
-    private static URL getDefaultFromJar() {
-        return SRX.class.getResource("defaultRules.srx");
-    }
-
     public static SRX getDefault() {
-        SRX srx = loadSrxFile(getDefaultFromJar());
-        srx.init();
+        SRX srx = loadSrxFile(SRX.class.getResource("defaultRules.srx"));
+        srx.includeEndingTags = true;
+        srx.segmentSubflows = true;
         return srx;
     }
 
