@@ -23,9 +23,8 @@ OmegaT file filter plugin.
 There must be a manifest file that indicates that it is an OmegaT plugin. There are two flavors, see below. 
 Omegat 5.3.0 also supports to provide additional information (valid for both flavors) that can be displayed in the UI. 
 You can **optionally** provide name, version, author and description. 
-
 OmegaT 5.5.0 can show the plugin name and author in Preferences. You are recommended to set these parameters.
-
+You can **optionally** provide an URL of your plugin home page, license and category.
 For each there are different manifest entry alternatives, and OmegaT will pick the first one present in the order from 
 left to right as described in the table below:
 
@@ -35,6 +34,9 @@ left to right as described in the table below:
 | Version     | Plugin-Version, Bundle-Version, Implementation-Version |
 | Author      | Plugin-Author, Implementation-Vendor, Built-By         |
 | Description | Plugin-Description                                     |
+| Link        | Plugin-Link                                            |
+| License     | Plugin-License                                         |
+| Category    | Plugin-Category                                        |
 
 ### plugins for OmegaT 2.1.3 and up
 A plugin should be declared in `META-INF/MANIFEST.MF`:
@@ -58,6 +60,8 @@ A plugin should be declared in `META-INF/MANIFEST.MF`:
     [Plugin-Version: x.y.z]
     [Plugin-Author: …]
     [Plugin-Description: …]
+    [Plugin-Link: https://..]
+    [Plugin-Category: filter]
     OmegaT-Plugins: <classname>
 
 where classname is the fully qualified classname of the plugin's initialization class. Multiple classnames can be defined, 
