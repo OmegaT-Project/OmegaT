@@ -70,10 +70,47 @@ import org.omegat.util.StringUtil;
  */
 public final class PluginUtils {
 
+    /**
+     * Fallback properties file of plugin descriptions.
+     */
     public static final String PLUGINS_LIST_FILE = "Plugins.properties";
 
-    enum PluginType {
-        FILTER, TOKENIZER, MARKER, MACHINETRANSLATOR, BASE, GLOSSARY, UNKNOWN
+    /**
+     * Plugin type definitions.
+     */
+    public enum PluginType {
+        FILTER("filter"),
+        TOKENIZER("tokenizer"),
+        MARKER("marker"),
+        MACHINETRANSLATOR("machinetranslator"),
+        BASE("base"),
+        GLOSSARY("glossary"),
+        DICTIONARY("dictionary"),
+        MISCELLANEOUS("miscellaneous"),
+        THEME("theme"),
+        UNKNOWN("Undefined");
+
+        private final String typeValue;
+
+        PluginType(String type) {
+            typeValue = type;
+        }
+
+        public String getTypeValue() {
+            return typeValue;
+        }
+
+        public static PluginType getTypeByValue(String str) {
+            String sType = str.toLowerCase(Locale.ENGLISH);
+            for(PluginType v : values())
+            {
+                if(v.getTypeValue().equals(sType))
+                {
+                    return v;
+                }
+            }
+            throw new IllegalArgumentException("undefined : " + str);
+        }
     }
 
     protected static final List<Class<?>> LOADED_PLUGINS = new ArrayList<>();
@@ -113,6 +150,9 @@ public final class PluginUtils {
                     if ("org.omegat.Main".equals(m.getMainAttributes().getValue("Main-Class"))) {
                         // found main manifest - not in development mode
                         foundMain = true;
+                        loadFromManifest(m, pluginsClassLoader, null);
+                    } else {
+                        loadFromManifest(m, pluginsClassLoader, mu);
                     }
                     if ("theme".equals(m.getMainAttributes().getValue("Plugin-Category"))) {
                         String target = mu.toString();
@@ -122,7 +162,6 @@ public final class PluginUtils {
                             }
                         }
                     }
-                    loadFromManifest(m, pluginsClassLoader);
                 }
             }
             if (!foundMain) {
@@ -131,7 +170,7 @@ public final class PluginUtils {
                 if (manifests != null) {
                     for (String mf : manifests.split(File.pathSeparator)) {
                         try (InputStream in = new FileInputStream(mf)) {
-                            loadFromManifest(new Manifest(in), pluginsClassLoader);
+                            loadFromManifest(new Manifest(in), pluginsClassLoader, null);
                         }
                     }
                 } else {
@@ -274,7 +313,7 @@ public final class PluginUtils {
      *            classloader
      * @throws ClassNotFoundException when plugin class not found.
      */
-    protected static void loadFromManifest(final Manifest m, final ClassLoader classLoader)
+    protected static void loadFromManifest(final Manifest m, final ClassLoader classLoader, final URL mu)
             throws ClassNotFoundException {
         String pluginClasses = m.getMainAttributes().getValue("OmegaT-Plugins");
         if (pluginClasses != null) {
@@ -283,12 +322,16 @@ public final class PluginUtils {
                     continue;
                 }
                 if (loadClass(clazz, classLoader)) {
-                    PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, m));
+                    if (mu == null) {
+                        PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, m, null, PluginInformation.Status.BUNDLED));
+                    } else {
+                        PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, m, mu, PluginInformation.Status.INSTALLED));
+                    }
                 }
             }
         }
 
-        loadFromManifestOld(m, classLoader);
+        loadFromManifestOld(m, classLoader, mu);
     }
 
     protected static void loadFromProperties(Properties props, ClassLoader classLoader) throws ClassNotFoundException {
@@ -298,14 +341,13 @@ public final class PluginUtils {
             if (key.equals("plugin")) {
                 for (String clazz : classes) {
                     if (loadClass(clazz, classLoader)) {
-                        PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, props));
+                        PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, props, key, null, PluginInformation.Status.BUNDLED));
                     }
-
                 }
             } else {
                 for (String clazz : classes) {
                     if (loadClassOld(key, clazz, classLoader)) {
-                        PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, props));
+                        PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, props, key, null, PluginInformation.Status.BUNDLED));
                     }
                 }
             }
@@ -346,7 +388,7 @@ public final class PluginUtils {
     /**
      * Old-style plugin loading.
      */
-    protected static void loadFromManifestOld(final Manifest m, final ClassLoader classLoader)
+    protected static void loadFromManifestOld(final Manifest m, final ClassLoader classLoader, final URL mu)
             throws ClassNotFoundException {
         if (m.getMainAttributes().getValue("OmegaT-Plugin") == null) {
             return;
@@ -362,7 +404,11 @@ public final class PluginUtils {
                 continue;
             }
             if (loadClassOld(sType, key, classLoader)) {
-                PLUGIN_INFORMATIONS.add(new PluginInformation(key, m));
+                if (mu == null) {
+                    PLUGIN_INFORMATIONS.add(new PluginInformation(key, m, null, PluginInformation.Status.BUNDLED));
+                } else {
+                    PLUGIN_INFORMATIONS.add(new PluginInformation(key, m, mu, PluginInformation.Status.INSTALLED));
+                }
             }
         }
     }
@@ -371,7 +417,7 @@ public final class PluginUtils {
             throws ClassNotFoundException {
         PluginType pType;
         try {
-            pType = PluginType.valueOf(sType.toUpperCase(Locale.ENGLISH));
+            pType = PluginType.getTypeByValue(sType);
         } catch (Exception ex) {
             pType = PluginType.UNKNOWN;
         }

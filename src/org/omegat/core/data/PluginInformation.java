@@ -4,6 +4,7 @@
           glossaries, and translation leveraging into updated projects.
 
  Copyright (C) 2020 Briac Pilpre
+               2021 Hiroshi Miura
                Home page: http://www.omegat.org/
                Support center: https://omegat.org/support
 
@@ -25,15 +26,27 @@
 
 package org.omegat.core.data;
 
+import java.io.File;
+import java.net.URL;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 
-public class PluginInformation {
+import org.omegat.filters2.master.PluginUtils;
+
+public class PluginInformation implements Comparable<PluginInformation> {
     private static final String PLUGIN_NAME = "Plugin-Name";
     private static final String PLUGIN_VERSION = "Plugin-Version";
     private static final String PLUGIN_AUTHOR = "Plugin-Author";
     private static final String PLUGIN_DESCRIPTION = "Plugin-Description";
+    private static final String PLUGIN_CATEGORY = "Plugin-Category";
+    private static final String PLUGIN_LINK = "Plugin-Link";
+    private static final String PLUGIN_TYPE = "OmegaT-Plugin";
+    private static final String PLUGIN_JAR_URL = "Plugin-Download-Url";
+    private static final String PLUGIN_JAR_FILENAME = "Plugin-Jar-Filename";
+    private static final String PLUGIN_SHA256SUM = "Plugin-Sha256Sum";
 
     private static final String IMPLEMENTATION_VENDOR = "Implementation-Vendor";
     private static final String IMPLEMENTATION_TITLE = "Implementation-Title";
@@ -42,31 +55,76 @@ public class PluginInformation {
     private static final String BUNDLE_NAME = "Bundle-Name";
     private static final String BUILT_BY = "Built-By";
 
+    public enum Status {
+        INSTALLED,
+        BUNDLED,
+        UPGRADABLE,
+        UNINSTALLED
+    }
+
     private final String className;
     private final String name;
     private final String version;
     private final String author;
     private final String description;
+    private final String category;
+    private final String link;
+    private final URL url;
 
-    public PluginInformation(String className, Manifest manifest) {
+    // for manage and install
+    private Status status;
+    private String remoteJarFileUrl;
+    private String jarFilename;
+    private String sha256Sum;
+
+    public PluginInformation(final String className, final Manifest manifest, final URL mu, final Status status) {
         this.className = className;
-        Attributes attrs = manifest.getMainAttributes();
-        name = findName(manifest);
-        version = findVersion(manifest);
-        author = findAuthor(manifest);
+        Attributes mainAttrs = manifest.getMainAttributes();
+        Attributes attrs = manifest.getEntries().get(className);
+        if (attrs == null) {
+            attrs = manifest.getMainAttributes();
+        }
+        name = findName(attrs);
+        version = findVersion(attrs, mainAttrs);
+        author = findAuthor(mainAttrs);
         description = attrs.getValue(PLUGIN_DESCRIPTION);
+        link = attrs.getValue(PLUGIN_LINK);
+        category = categoryName(attrs.getValue(PLUGIN_CATEGORY), attrs.getValue(PLUGIN_TYPE));
+        url = mu;
+        this.status = status;
+
+        // rmeote plugin information
+        remoteJarFileUrl = attrs.getValue(PLUGIN_JAR_URL);
+        jarFilename = getJarFilename(attrs);
+        sha256Sum = attrs.getValue(PLUGIN_SHA256SUM);
     }
 
-    public PluginInformation(String className, Properties props) {
+    public PluginInformation(String className, Properties props, final String key, final URL mu, final Status status) {
         this.className = className;
-        name = null;
+        name = className.substring(className.lastIndexOf(".") + 1);
         version = null;
         author = null;
         description = null;
+        category = categoryName(key, null);
+        link = null;
+        url = mu;
+        this.status = status;
+        remoteJarFileUrl = null;
+        jarFilename = null;
+        sha256Sum = null;
     }
 
-    private String findName(Manifest m) {
-        Attributes attrs = m.getMainAttributes();
+    private String categoryName(final String key1, final String key2) {
+        String key = key1 != null ? key1 : key2;
+        Optional<PluginUtils.PluginType> type = Arrays.stream(PluginUtils.PluginType.values()).filter(v ->
+                v.getTypeValue().equals(key)).findFirst();
+        if (type.isPresent()) {
+            return type.get().getTypeValue();
+        }
+        return PluginUtils.PluginType.UNKNOWN.getTypeValue();
+    }
+
+    private String findName(Attributes attrs) {
         if (attrs.getValue(PLUGIN_NAME) != null) {
             return attrs.getValue(PLUGIN_NAME);
         } else if (attrs.getValue(BUNDLE_NAME) != null) {
@@ -74,29 +132,55 @@ public class PluginInformation {
         } else if (attrs.getValue(IMPLEMENTATION_TITLE) != null) {
             return attrs.getValue(IMPLEMENTATION_TITLE);
         }
-        return null;
+        // fallback to className
+        return className.substring(className.lastIndexOf(".") + 1);
     }
 
-    private String findVersion(Manifest m) {
-        Attributes attrs = m.getMainAttributes();
+    private String findVersion(Attributes attrs, Attributes mainAttrs) {
         if (attrs.getValue(PLUGIN_VERSION) != null) {
             return attrs.getValue(PLUGIN_VERSION);
         } else if (attrs.getValue(BUNDLE_VERSION) != null) {
             return attrs.getValue(BUNDLE_VERSION);
         } else if (attrs.getValue(IMPLEMENTATION_VERSION) != null) {
             return attrs.getValue(IMPLEMENTATION_VERSION);
+        } else if (mainAttrs.getValue(PLUGIN_VERSION) != null) {
+            return mainAttrs.getValue(PLUGIN_VERSION);
+        } else if (mainAttrs.getValue(BUNDLE_VERSION) != null) {
+            return mainAttrs.getValue(BUNDLE_VERSION);
+        } else if (mainAttrs.getValue(IMPLEMENTATION_VERSION) != null) {
+            return mainAttrs.getValue(IMPLEMENTATION_VERSION);
         }
-        return null;
+        return "unknown";
     }
 
-    private String findAuthor(Manifest m) {
-        Attributes attrs = m.getMainAttributes();
-        if (attrs.getValue(PLUGIN_AUTHOR) != null) {
+    private String findAuthor(Attributes attrs) {
+        if ("org.omegat.Main".equals(attrs.getValue("Main-Class"))) {
+            return "OmegaT team";
+        } else if (attrs.getValue(PLUGIN_AUTHOR) != null) {
             return attrs.getValue(PLUGIN_AUTHOR);
         } else if (attrs.getValue(IMPLEMENTATION_VENDOR) != null) {
             return attrs.getValue(IMPLEMENTATION_VENDOR);
         } else if (attrs.getValue(BUILT_BY) != null) {
             return attrs.getValue(BUILT_BY);
+        }
+        return null;
+    }
+
+    private String getJarFilename(Attributes attrs) {
+        String attrsName = attrs.getValue(PLUGIN_JAR_FILENAME);
+        if (attrsName != null) {
+            return attrsName;
+        }
+        if (attrs.getValue(PLUGIN_JAR_URL) != null) {
+            int from = remoteJarFileUrl.lastIndexOf("/");
+            int to = remoteJarFileUrl.indexOf("?");
+            if (from != -1) {
+                if (to == -1) {
+                    return remoteJarFileUrl.substring(from + 1);
+                } else {
+                    return remoteJarFileUrl.substring(from + 1, to);
+                }
+            }
         }
         return null;
     }
@@ -121,6 +205,46 @@ public class PluginInformation {
         return author;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
+    public String getLink() {
+        return link;
+    }
+
+    public File getJarFile() {
+        return new File(url.getPath().substring(5, url.getPath().indexOf("!")));
+    }
+
+    public boolean isBundled() {
+        return status == Status.BUNDLED;
+    }
+
+    public boolean isInstalled() {
+        return status == Status.INSTALLED || status == Status.BUNDLED;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status s) {
+        status = s;
+    }
+
+    public String getRemoteJarFileUrl() {
+        return remoteJarFileUrl;
+    }
+
+    public String getJarFilename() {
+        return jarFilename;
+    }
+
+    public String getSha256Sum() {
+        return sha256Sum;
+    }
+
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
@@ -143,34 +267,93 @@ public class PluginInformation {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         PluginInformation other = (PluginInformation) obj;
         if (author == null) {
-            if (other.author != null)
+            if (other.author != null) {
                 return false;
-        } else if (!author.equals(other.author))
+            }
+        } else if (!author.equals(other.author)) {
             return false;
+        }
         if (className == null) {
-            if (other.className != null)
+            if (other.className != null) {
                 return false;
-        } else if (!className.equals(other.className))
+            }
+        } else if (!className.equals(other.className)) {
             return false;
+        }
         if (name == null) {
-            if (other.name != null)
+            if (other.name != null) {
                 return false;
-        } else if (!name.equals(other.name))
+            }
+        } else if (!name.equals(other.name)) {
             return false;
+        }
         if (version == null) {
-            if (other.version != null)
-                return false;
-        } else if (!version.equals(other.version))
-            return false;
-        return true;
+            return other.version == null;
+        } else {
+            return version.equals(other.version);
+        }
     }
 
+    @Override
+    public int compareTo(PluginInformation pluginInformation) {
+        int score;
+        if (this == pluginInformation || className.equals(pluginInformation.getClass().getName())) {
+            return version.compareTo(pluginInformation.getVersion());
+        }
+        if (pluginInformation.category != null) {
+            if (category == null) {
+                if ("bundle".equals(pluginInformation.category)) {
+                    return 1;
+                } else {
+                    return -1;
+                }
+            } else {
+                score = category.compareTo(pluginInformation.getCategory());
+                if (score != 0) {
+                    return score;
+                }
+            }
+        }
+        if (pluginInformation.getAuthor() != null) {
+            if (author == null) {
+                return -1;
+            } else {
+                score = author.compareTo(pluginInformation.getAuthor());
+                if (score != 0) {
+                    return score;
+                }
+            }
+        }
+        score = className.compareTo(pluginInformation.getClassName());
+        if (score !=0) {
+            return score;
+        }
+        if (pluginInformation.getName() != null) {
+            if (name == null) {
+                return -1;
+            }
+            score = name.compareTo(pluginInformation.getName());
+            if (score != 0) {
+                return score;
+            }
+        }
+        if (pluginInformation.getVersion() != null) {
+            if (version == null) {
+                return -1;
+            }
+            return version.compareTo(pluginInformation.getVersion());
+        }
+        return 0;
+    }
 }
