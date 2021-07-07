@@ -25,6 +25,8 @@
 
 package org.omegat.core.data;
 
+import java.io.File;
+import java.net.URL;
 import java.util.Properties;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
@@ -47,14 +49,16 @@ public class PluginInformation {
     private final String version;
     private final String author;
     private final String description;
+    private final URL url;
 
-    public PluginInformation(String className, Manifest manifest) {
+    public PluginInformation(String className, Manifest manifest, final URL mu) {
         this.className = className;
         Attributes attrs = manifest.getMainAttributes();
         name = findName(manifest);
         version = findVersion(manifest);
         author = findAuthor(manifest);
         description = attrs.getValue(PLUGIN_DESCRIPTION);
+        url = mu;
     }
 
     public PluginInformation(String className, Properties props) {
@@ -63,6 +67,7 @@ public class PluginInformation {
         version = null;
         author = null;
         description = null;
+        url = null;
     }
 
     private String findName(Manifest m) {
@@ -119,6 +124,10 @@ public class PluginInformation {
 
     public String getAuthor() {
         return author;
+    }
+
+    public final File getJarFile() {
+        return new File(url.getPath().substring(5, url.getPath().indexOf("!")));
     }
 
     @Override

@@ -113,6 +113,9 @@ public final class PluginUtils {
                     if ("org.omegat.Main".equals(m.getMainAttributes().getValue("Main-Class"))) {
                         // found main manifest - not in development mode
                         foundMain = true;
+                        loadFromManifest(m, pluginsClassLoader, null);
+                    } else {
+                        loadFromManifest(m, pluginsClassLoader, mu);
                     }
                     if ("theme".equals(m.getMainAttributes().getValue("Plugin-Category"))) {
                         String target = mu.toString();
@@ -122,7 +125,6 @@ public final class PluginUtils {
                             }
                         }
                     }
-                    loadFromManifest(m, pluginsClassLoader);
                 }
             }
             if (!foundMain) {
@@ -131,7 +133,7 @@ public final class PluginUtils {
                 if (manifests != null) {
                     for (String mf : manifests.split(File.pathSeparator)) {
                         try (InputStream in = new FileInputStream(mf)) {
-                            loadFromManifest(new Manifest(in), pluginsClassLoader);
+                            loadFromManifest(new Manifest(in), pluginsClassLoader, null);
                         }
                     }
                 } else {
@@ -274,7 +276,7 @@ public final class PluginUtils {
      *            classloader
      * @throws ClassNotFoundException when plugin class not found.
      */
-    protected static void loadFromManifest(final Manifest m, final ClassLoader classLoader)
+    protected static void loadFromManifest(final Manifest m, final ClassLoader classLoader, final URL mu)
             throws ClassNotFoundException {
         String pluginClasses = m.getMainAttributes().getValue("OmegaT-Plugins");
         if (pluginClasses != null) {
@@ -283,7 +285,7 @@ public final class PluginUtils {
                     continue;
                 }
                 if (loadClass(clazz, classLoader)) {
-                    PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, m));
+                    PLUGIN_INFORMATIONS.add(new PluginInformation(clazz, m, mu));
                 }
             }
         }
@@ -362,7 +364,7 @@ public final class PluginUtils {
                 continue;
             }
             if (loadClassOld(sType, key, classLoader)) {
-                PLUGIN_INFORMATIONS.add(new PluginInformation(key, m));
+                PLUGIN_INFORMATIONS.add(new PluginInformation(key, m, null));
             }
         }
     }
