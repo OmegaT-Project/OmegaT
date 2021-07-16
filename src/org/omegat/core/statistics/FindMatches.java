@@ -233,15 +233,22 @@ public class FindMatches {
                     // Not all TMX entries have a source; in that case there can be no meaningful match, so skip.
                     continue;
                 }
-                if (requiresTranslation && tmen.translation == null) {
-                    continue;
+
+                if (requiresTranslation) {
+                    if (tmen.translation == null) {
+                        continue;
+                    }
+                    String sourceLang = tmen.getPropValue(ExternalTMFactory.TMXLoader.PROP_TARGET_LANGUAGE);
+                    String targetLang = tmen.getPropValue(ExternalTMFactory.TMXLoader.PROP_SOURCE_LANGUAGE);
+                    if (sourceLang.equals(targetLang)) {
+                        continue;
+                    }
                 }
 
                 int tmenPenalty = penalty;
                 if (tmen.hasPropValue(ExternalTMFactory.TMXLoader.PROP_FOREIGN_MATCH, "true")) {
                     tmenPenalty += foreignPenalty;
                 }
-
                 processEntry(null, tmen.source, tmen.translation, NearString.MATCH_SOURCE.TM, false, tmenPenalty,
                         en.getKey(), tmen.creator, tmen.creationDate, tmen.changer, tmen.changeDate,
                         tmen.otherProperties);
